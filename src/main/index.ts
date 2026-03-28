@@ -2,6 +2,7 @@ import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
+import { registerConfigHandlers } from './ipc/configHandlers'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -52,6 +53,7 @@ app.whenReady().then(() => {
     optimizer.watchWindowShortcuts(window)
   })
 
+  registerConfigHandlers()
   createWindow()
 
   app.on('activate', function () {
