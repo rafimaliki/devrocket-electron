@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerConfigHandlers } from './ipc/configHandlers'
+import { registerSessionHandlers } from './ipc/sessionHandlers'
 import { registerSystemHandlers, checkVscodeOnStartup } from './ipc/systemHandlers'
 import { startProcessTracker, stopProcessTracker } from './services/processTracker'
 
@@ -56,6 +57,7 @@ app.whenReady().then(() => {
   })
 
   registerConfigHandlers()
+  registerSessionHandlers()
   registerSystemHandlers()
   checkVscodeOnStartup()
   startProcessTracker()
