@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { Project, Repo, VSCodeWindow, TerminalInstance, SessionState } from '../shared/types'
 
+export type LaunchMode = 'new' | 'switch'
+
 const devrocketAPI = {
   projects: {
     list: (): Promise<Project[]> => ipcRenderer.invoke('projects:list'),
@@ -15,21 +17,33 @@ const devrocketAPI = {
       name: string,
       vscodeWindows: Omit<VSCodeWindow, 'id'>[],
       terminals: Omit<TerminalInstance, 'id'>[]
-    ): Promise<Repo> => ipcRenderer.invoke('repos:create', projectId, name, vscodeWindows, terminals),
+    ): Promise<Repo> =>
+      ipcRenderer.invoke('repos:create', projectId, name, vscodeWindows, terminals),
     update: (
       repoId: string,
       name: string,
       vscodeWindows: Omit<VSCodeWindow, 'id'>[],
       terminals: Omit<TerminalInstance, 'id'>[]
-    ): Promise<Repo> => ipcRenderer.invoke('repos:update', repoId, name, vscodeWindows, terminals),
+    ): Promise<Repo> =>
+      ipcRenderer.invoke('repos:update', repoId, name, vscodeWindows, terminals),
     delete: (repoId: string): Promise<void> => ipcRenderer.invoke('repos:delete', repoId)
   },
   session: {
-    // Populated in Phase 3
-    launch: null as unknown,
-    kill: null as unknown,
-    status: null as unknown,
-    onStatusUpdate: null as unknown
+    launch: (repoId: string, mode: LaunchMode): Promise<SessionState> =>
+      ipcRenderer.invoke('session:launch', repoId, mode),
+    kill: (repoId: string): Promise<void> => ipcRenderer.invoke('session:kill', repoId),
+    status: (): Promise<SessionState[]> => ipcRenderer.invoke('session:status'),
+    onStatusUpdate: (
+      callback: (update: { repoId: string; active: boolean }) => void
+    ): (() => void) => {
+      const handler = (
+        _event: Electron.IpcRendererEvent,
+        update: { repoId: string; active: boolean }
+      ): void => callback(update)
+      ipcRenderer.on('session:status-update', handler)
+      // Return cleanup function
+      return () => ipcRenderer.removeListener('session:status-update', handler)
+    }
   },
   system: {
     checkVscode: (): Promise<boolean> => ipcRenderer.invoke('system:check-vscode')
