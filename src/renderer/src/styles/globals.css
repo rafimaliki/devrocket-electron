@@ -52,3 +52,33 @@ body,
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-text-muted);
 }
+
+/* Utility hover transitions */
+button {
+  transition: opacity 0.1s, background-color 0.15s, color 0.15s;
+}
+
+button:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+input::placeholder {
+  color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+input:focus {
+  outline: none;
+  border-color: var(--color-accent) !important;
+}
+
+/* App shell */
+#root {
+  display: flex;
+  flex-direction: column;
+}

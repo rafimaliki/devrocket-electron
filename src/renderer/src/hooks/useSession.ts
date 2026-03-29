@@ -32,7 +32,7 @@ export function useSession() {
 
   const isActive = useCallback((repoId: string) => !!sessions[repoId]?.active, [sessions])
 
-  const launch = useCallback(async (repoId: string, mode: LaunchMode): Promise<void> => {
+  const launch = useCallback(async (repoId: string, mode: LaunchMode): Promise<string[]> => {
     const state = await sessionIPC.launch(repoId, mode)
     setSessions((prev) => {
       const next = { ...prev }
@@ -43,6 +43,7 @@ export function useSession() {
       next[repoId] = state
       return next
     })
+    return state.warnings ?? []
   }, [])
 
   const kill = useCallback(async (repoId: string): Promise<void> => {
