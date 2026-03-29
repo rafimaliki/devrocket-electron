@@ -27,7 +27,8 @@ function pollSessions(): void {
   for (const [repoId, state] of sessions) {
     if (!state.active) continue
 
-    const allDead = state.pids.every((pid) => !isPidAlive(pid))
+    const allPids = [...(state.terminalPids ?? []), ...(state.vscodePids ?? [])]
+    const allDead = allPids.length === 0 || allPids.every((pid) => !isPidAlive(pid))
     if (allDead) {
       removeSession(repoId)
       sendStatusUpdate(repoId, false)
