@@ -7,7 +7,7 @@ export function registerSessionHandlers(): void {
   ipcMain.handle('session:launch', (_event, repoId: string, mode: LaunchMode) => {
     // Find the repo config from store
     const projects = listProjects()
-    let repo = null
+    let repo: (typeof projects)[0]['repos'][0] | null = null
     for (const project of projects) {
       const found = project.repos.find((r) => r.id === repoId)
       if (found) {
