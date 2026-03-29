@@ -6,7 +6,8 @@ export type LaunchMode = 'new' | 'switch'
 
 interface InternalSession {
   repoId: string
-  pids: number[]
+  pids: number[]             // terminal PIDs — killed with taskkill
+  vscodeDirectories: string[] // VSCode dirs — closed by window title at kill time
   active: boolean
 }
 
@@ -14,74 +15,40 @@ const sessions = new Map<string, InternalSession>()
 
 // --- Spawn helpers ---
 
-/**
- * Spawns a process using PowerShell Start-Process -PassThru to get a real PID.
- * Uses -EncodedCommand to avoid all quoting/escaping issues with paths.
- */
-function spawnAndGetPid(executable: string, args: string[], directory: string): number | null {
-  const argsPart =
-    args.length > 0
-      ? `-ArgumentList ${args.map((a) => `'${a.replace(/'/g, "''")}'`).join(', ')} `
-      : ''
-  const psScript = `(Start-Process -FilePath '${executable.replace(/'/g, "''")}' ${argsPart}-WorkingDirectory '${directory.replace(/'/g, "''")}' -PassThru).Id`
-
-  // Encode as UTF-16LE base64 — avoids all shell quoting issues
+function runEncoded(psScript: string, timeoutMs = 8000): string {
   const encoded = Buffer.from(psScript, 'utf16le').toString('base64')
+  return execSync(`powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, {
+    encoding: 'utf-8',
+    timeout: timeoutMs
+  })
+}
 
+function spawnVscodeWindow(directory: string): boolean {
+  if (!existsSync(directory)) {
+    console.warn(`[session] VSCode: directory not found: ${directory}`)
+    return false
+  }
   try {
-    const result = execSync(`powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, {
-      encoding: 'utf-8',
-      timeout: 8000
-    })
-    const pid = parseInt(result.trim(), 10)
-    return !isNaN(pid) && pid > 0 ? pid : null
+    execSync(`code --new-window "${directory}"`, { shell: true, stdio: 'ignore', timeout: 8000 })
+    return true
   } catch (err) {
-    console.error(`[session] Failed to spawn '${executable}':`, err)
-    return null
+    console.warn('[session] VSCode launch error:', err)
+    return false
   }
 }
 
-function spawnVscodeWindow(directory: string): number | null {
-  if (!existsSync(directory)) {
-    console.warn(`[session] VSCode: directory not found: ${directory}`)
-    return null
-  }
-
-  // Launch VSCode
-  try {
-    execSync(`code --new-window "${directory}"`, { shell: true, stdio: 'ignore', timeout: 8000 })
-  } catch (err) {
-    console.warn('[session] VSCode launch error:', err)
-    return null
-  }
-
-  // Wait for the window to finish loading and set its title
-  execSync('powershell.exe -NoProfile -Command "Start-Sleep -Seconds 3"', {
-    stdio: 'ignore',
-    timeout: 6000
-  })
-
-  // VSCode window title format: "<folder> - Visual Studio Code"
-  // Find the most recently started Code.exe whose window title contains the folder name.
+function closeVscodeWindow(directory: string): void {
   const folderName = directory.split(/[\\/]/).filter(Boolean).pop() ?? ''
-  if (!folderName) return null
-
+  if (!folderName) return
+  // CloseMainWindow() sends WM_CLOSE — closes just the matching window gracefully
+  const script =
+    `Get-Process Code -ErrorAction SilentlyContinue ` +
+    `| Where-Object { $_.MainWindowTitle -like '*${folderName.replace(/'/g, "''")}*' } ` +
+    `| ForEach-Object { $_.CloseMainWindow() | Out-Null }`
   try {
-    const script =
-      `$p = Get-Process Code -ErrorAction SilentlyContinue ` +
-      `| Where-Object { $_.MainWindowTitle -like '*${folderName.replace(/'/g, "''")}*' } ` +
-      `| Sort-Object StartTime -Descending ` +
-      `| Select-Object -First 1; ` +
-      `if ($p) { $p.Id } else { 0 }`
-    const encoded = Buffer.from(script, 'utf16le').toString('base64')
-    const result = execSync(
-      `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`,
-      { encoding: 'utf-8', timeout: 5000 }
-    )
-    const pid = parseInt(result.trim(), 10)
-    return pid > 0 ? pid : null
+    runEncoded(script, 5000)
   } catch {
-    return null
+    // Best effort
   }
 }
 
@@ -90,14 +57,23 @@ function spawnTerminal(shell: string, directory: string): number | null {
     console.warn(`[session] Terminal: directory not found: ${directory}`)
     return null
   }
-  return spawnAndGetPid(shell, [], directory)
+  const argsPart = `-WorkingDirectory '${directory.replace(/'/g, "''")}' `
+  const psScript = `(Start-Process -FilePath '${shell.replace(/'/g, "''")}' ${argsPart}-PassThru).Id`
+  try {
+    const result = runEncoded(psScript)
+    const pid = parseInt(result.trim(), 10)
+    return pid > 0 ? pid : null
+  } catch (err) {
+    console.error(`[session] Terminal spawn error:`, err)
+    return null
+  }
 }
 
 function killPid(pid: number): void {
   try {
     execSync(`taskkill /F /T /PID ${pid}`, { stdio: 'ignore' })
   } catch {
-    // Already exited — ignore
+    // Already exited
   }
 }
 
@@ -109,10 +85,12 @@ export function launchRepo(repo: Repo, mode: LaunchMode): SessionState {
   }
 
   const pids: number[] = []
+  const vscodeDirectories: string[] = []
 
   for (const win of repo.vscodeWindows) {
-    const pid = spawnVscodeWindow(win.directory)
-    if (pid) pids.push(pid)
+    if (spawnVscodeWindow(win.directory)) {
+      vscodeDirectories.push(win.directory)
+    }
   }
 
   for (const term of repo.terminals) {
@@ -120,14 +98,15 @@ export function launchRepo(repo: Repo, mode: LaunchMode): SessionState {
     if (pid) pids.push(pid)
   }
 
-  const active = pids.length > 0
-  sessions.set(repo.id, { repoId: repo.id, pids, active })
+  const active = vscodeDirectories.length > 0 || pids.length > 0
+  sessions.set(repo.id, { repoId: repo.id, pids, vscodeDirectories, active })
   return { repoId: repo.id, pids, active }
 }
 
 export function killRepo(repoId: string): void {
   const session = sessions.get(repoId)
   if (!session) return
+  for (const dir of session.vscodeDirectories) closeVscodeWindow(dir)
   for (const pid of session.pids) killPid(pid)
   sessions.delete(repoId)
 }
