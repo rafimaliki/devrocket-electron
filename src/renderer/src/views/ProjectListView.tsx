@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import type { Project } from '@shared/types'
 import ConfirmDialog from '../components/ConfirmDialog'
 
@@ -6,6 +6,7 @@ interface ProjectListViewProps {
   projects: Project[]
   onSelect: (projectId: string) => void
   onCreateProject: (name: string) => void
+  onUpdateProject: (id: string, name: string) => void
   onDeleteProject: (projectId: string) => void
 }
 
@@ -13,10 +14,18 @@ export default function ProjectListView({
   projects,
   onSelect,
   onCreateProject,
+  onUpdateProject,
   onDeleteProject
 }: ProjectListViewProps) {
   const [newName, setNewName] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const editInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (editingId) editInputRef.current?.focus()
+  }, [editingId])
 
   function handleCreate() {
     const name = newName.trim()
@@ -27,6 +36,35 @@ export default function ProjectListView({
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter') handleCreate()
+  }
+
+  function startEdit(p: Project, e: React.MouseEvent) {
+    e.stopPropagation()
+    setEditingId(p.id)
+    setEditingName(p.name)
+  }
+
+  function commitEdit(id: string) {
+    const name = editingName.trim()
+    if (name) onUpdateProject(id, name)
+    setEditingId(null)
+  }
+
+  function handleEditKeyDown(e: React.KeyboardEvent, id: string) {
+    if (e.key === 'Enter') commitEdit(id)
+    if (e.key === 'Escape') setEditingId(null)
+  }
+
+  const inputStyle = {
+    flex: 1,
+    backgroundColor: 'var(--color-surface)',
+    border: '1px solid var(--color-border)',
+    color: 'var(--color-text)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '13px',
+    borderRadius: '6px',
+    padding: '8px 12px',
+    outline: 'none'
   }
 
   return (
@@ -50,17 +88,7 @@ export default function ProjectListView({
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={handleKeyDown}
           placeholder="new project name"
-          style={{
-            flex: 1,
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--color-border)',
-            color: 'var(--color-text)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '13px',
-            borderRadius: '6px',
-            padding: '8px 12px',
-            outline: 'none'
-          }}
+          style={inputStyle}
         />
         <button
           onClick={handleCreate}
@@ -68,12 +96,13 @@ export default function ProjectListView({
           style={{
             backgroundColor: newName.trim() ? 'var(--color-accent)' : 'var(--color-surface)',
             color: newName.trim() ? '#fff' : 'var(--color-text-muted)',
-            border: 'none',
+            border: '1px solid ' + (newName.trim() ? 'var(--color-accent)' : 'var(--color-border)'),
             borderRadius: '6px',
             padding: '8px 16px',
             fontFamily: 'var(--font-mono)',
             fontSize: '13px',
-            cursor: newName.trim() ? 'pointer' : 'default'
+            cursor: newName.trim() ? 'pointer' : 'default',
+            transition: 'background-color 0.15s'
           }}
         >
           create
@@ -91,33 +120,66 @@ export default function ProjectListView({
             <div
               key={p.id}
               className="flex items-center justify-between rounded-lg border px-4 py-3"
-              style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              style={{
+                backgroundColor: 'var(--color-surface)',
+                borderColor: 'var(--color-border)',
+                cursor: editingId === p.id ? 'default' : 'pointer'
+              }}
+              onClick={() => editingId !== p.id && onSelect(p.id)}
             >
-              <button
-                onClick={() => onSelect(p.id)}
-                style={{
-                  background: 'none',
-                  border: 'none',
-                  cursor: 'pointer',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '14px',
-                  color: 'var(--color-text)',
-                  padding: 0,
-                  textAlign: 'left',
-                  flex: 1
-                }}
-              >
-                {p.name}
-              </button>
-              <div className="flex items-center gap-3">
+              {editingId === p.id ? (
+                <input
+                  ref={editInputRef}
+                  value={editingName}
+                  onChange={(e) => setEditingName(e.target.value)}
+                  onBlur={() => commitEdit(p.id)}
+                  onKeyDown={(e) => handleEditKeyDown(e, p.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  style={{
+                    flex: 1,
+                    background: 'none',
+                    border: 'none',
+                    borderBottom: '1px solid var(--color-accent)',
+                    color: 'var(--color-text)',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '14px',
+                    outline: 'none',
+                    padding: '0 0 2px 0'
+                  }}
+                />
+              ) : (
+                <span
+                  style={{
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: '14px',
+                    color: 'var(--color-text)',
+                    flex: 1
+                  }}
+                >
+                  {p.name}
+                </span>
+              )}
+              <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
                 <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
                   {p.repos.length} repo{p.repos.length !== 1 ? 's' : ''}
                 </span>
                 <button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setDeleteTarget(p)
+                  onClick={(e) => startEdit(p, e)}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: 'var(--color-text-muted)',
+                    fontSize: '12px',
+                    fontFamily: 'var(--font-mono)',
+                    padding: '2px 4px'
                   }}
+                  title="Rename"
+                >
+                  edit
+                </button>
+                <button
+                  onClick={() => setDeleteTarget(p)}
                   style={{
                     background: 'none',
                     border: 'none',

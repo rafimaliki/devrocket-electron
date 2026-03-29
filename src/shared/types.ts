@@ -33,4 +33,5 @@ export interface SessionState {
   repoId: string
   pids: number[]
   active: boolean
+  warnings?: string[]
 }

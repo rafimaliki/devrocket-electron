@@ -93,12 +93,21 @@ export function launchRepo(repo: Repo, mode: LaunchMode): SessionState {
 
   const terminalPids: number[] = []
   let vscodePids: number[] = []
+  const warnings: string[] = []
 
   for (const win of repo.vscodeWindows) {
+    if (!existsSync(win.directory)) {
+      warnings.push(`VSCode: directory not found: ${win.directory}`)
+      continue
+    }
     vscodePids = vscodePids.concat(spawnVscodeWindow(win.directory))
   }
 
   for (const term of repo.terminals) {
+    if (!existsSync(term.directory)) {
+      warnings.push(`Terminal: directory not found: ${term.directory}`)
+      continue
+    }
     const pid = spawnTerminal(term.shell, term.directory)
     if (pid) terminalPids.push(pid)
   }
@@ -106,7 +115,7 @@ export function launchRepo(repo: Repo, mode: LaunchMode): SessionState {
   const allPids = [...vscodePids, ...terminalPids]
   const active = allPids.length > 0
   sessions.set(repo.id, { repoId: repo.id, terminalPids, vscodePids, active })
-  return { repoId: repo.id, pids: allPids, active }
+  return { repoId: repo.id, pids: allPids, active, warnings: warnings.length > 0 ? warnings : undefined }
 }
 
 export function killRepo(repoId: string): void {
