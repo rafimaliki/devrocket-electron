@@ -38,15 +38,49 @@ function spawnVscodeWindow(directory: string): boolean {
 }
 
 function closeVscodeWindow(directory: string): void {
+  // Match on both the full path and just the folder name — handles custom VS Code title formats.
+  // Use EnumWindows to find all visible windows owned by Code.exe and close the matching one.
   const folderName = directory.split(/[\\/]/).filter(Boolean).pop() ?? ''
-  if (!folderName) return
-  // CloseMainWindow() sends WM_CLOSE — closes just the matching window gracefully
-  const script =
-    `Get-Process Code -ErrorAction SilentlyContinue ` +
-    `| Where-Object { $_.MainWindowTitle -like '*${folderName.replace(/'/g, "''")}*' } ` +
-    `| ForEach-Object { $_.CloseMainWindow() | Out-Null }`
+  const escapedDir = directory.replace(/\\/g, '\\\\').replace(/'/g, "''")
+  const escapedFolder = folderName.replace(/'/g, "''")
+
+  const script = `
+Add-Type @"
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+using System.Collections.Generic;
+public class DR {
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWndProc e, IntPtr p);
+  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
+  [DllImport("user32.dll")] public static extern IntPtr PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
+  public delegate bool EnumWndProc(IntPtr h, IntPtr p);
+  public static void Close(string[] patterns, uint[] pids) {
+    var ps = new HashSet<uint>(pids);
+    EnumWindows((hWnd, _) => {
+      if (!IsWindowVisible(hWnd)) return true;
+      var sb = new StringBuilder(512); GetWindowText(hWnd, sb, 512);
+      string t = sb.ToString();
+      uint pid; GetWindowThreadProcessId(hWnd, out pid);
+      if (ps.Contains(pid)) {
+        foreach (var p in patterns) {
+          if (t.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0) {
+            PostMessage(hWnd, 0x0010, IntPtr.Zero, IntPtr.Zero); return true;
+          }
+        }
+      }
+      return true;
+    }, IntPtr.Zero);
+  }
+}
+"@ -ErrorAction SilentlyContinue
+$pids = (Get-Process Code -ErrorAction SilentlyContinue).Id
+if ($pids) { [DR]::Close(@('${escapedFolder}', '${escapedDir}'), $pids) }
+`
   try {
-    runEncoded(script, 5000)
+    runEncoded(script, 8000)
   } catch {
     // Best effort
   }
