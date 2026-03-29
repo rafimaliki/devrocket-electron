@@ -6,8 +6,8 @@ export type LaunchMode = 'new' | 'switch'
 
 interface InternalSession {
   repoId: string
-  pids: number[]             // terminal PIDs — killed with taskkill
-  vscodeDirectories: string[] // VSCode dirs — closed by window title at kill time
+  terminalPids: number[]  // terminal PIDs — killed with taskkill
+  vscodePids: number[]    // Code.exe PIDs spawned for this window — killed with taskkill
   active: boolean
 }
 
@@ -23,66 +23,39 @@ function runEncoded(psScript: string, timeoutMs = 8000): string {
   })
 }
 
-function spawnVscodeWindow(directory: string): boolean {
+function spawnVscodeWindow(directory: string): number[] {
   if (!existsSync(directory)) {
     console.warn(`[session] VSCode: directory not found: ${directory}`)
-    return false
+    return []
   }
+  // Snapshot all Code.exe PIDs before launch
+  const before = getAllCodePids()
   try {
     execSync(`code --new-window "${directory}"`, { shell: true, stdio: 'ignore', timeout: 8000 })
-    return true
   } catch (err) {
     console.warn('[session] VSCode launch error:', err)
-    return false
+    return []
   }
-}
-
-function closeVscodeWindow(directory: string): void {
-  // Match on both the full path and just the folder name — handles custom VS Code title formats.
-  // Use EnumWindows to find all visible windows owned by Code.exe and close the matching one.
-  const folderName = directory.split(/[\\/]/).filter(Boolean).pop() ?? ''
-  const escapedDir = directory.replace(/\\/g, '\\\\').replace(/'/g, "''")
-  const escapedFolder = folderName.replace(/'/g, "''")
-
-  const script = `
-Add-Type @"
-using System;
-using System.Text;
-using System.Runtime.InteropServices;
-using System.Collections.Generic;
-public class DR {
-  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWndProc e, IntPtr p);
-  [DllImport("user32.dll")] public static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
-  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
-  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
-  [DllImport("user32.dll")] public static extern IntPtr PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
-  public delegate bool EnumWndProc(IntPtr h, IntPtr p);
-  public static void Close(string[] patterns, uint[] pids) {
-    var ps = new HashSet<uint>(pids);
-    EnumWindows((hWnd, _) => {
-      if (!IsWindowVisible(hWnd)) return true;
-      var sb = new StringBuilder(512); GetWindowText(hWnd, sb, 512);
-      string t = sb.ToString();
-      uint pid; GetWindowThreadProcessId(hWnd, out pid);
-      if (ps.Contains(pid)) {
-        foreach (var p in patterns) {
-          if (t.IndexOf(p, StringComparison.OrdinalIgnoreCase) >= 0) {
-            PostMessage(hWnd, 0x0010, IntPtr.Zero, IntPtr.Zero); return true;
-          }
-        }
-      }
-      return true;
-    }, IntPtr.Zero);
-  }
-}
-"@ -ErrorAction SilentlyContinue
-$pids = (Get-Process Code -ErrorAction SilentlyContinue).Id
-if ($pids) { [DR]::Close(@('${escapedFolder}', '${escapedDir}'), $pids) }
-`
+  // Wait for VS Code to spawn its renderer + extension host processes
   try {
-    runEncoded(script, 8000)
+    execSync('powershell.exe -NoProfile -Command "Start-Sleep -Seconds 3"', {
+      stdio: 'ignore',
+      timeout: 6000
+    })
+  } catch {}
+  const after = getAllCodePids()
+  return [...after].filter((pid) => !before.has(pid))
+}
+
+function getAllCodePids(): Set<number> {
+  try {
+    const script = `(Get-Process -Name 'Code' -ErrorAction SilentlyContinue).Id -join ','`
+    const out = runEncoded(script, 5000)
+    return new Set(
+      out.trim().split(',').filter(Boolean).map(Number).filter((n) => n > 0)
+    )
   } catch {
-    // Best effort
+    return new Set()
   }
 }
 
@@ -118,30 +91,29 @@ export function launchRepo(repo: Repo, mode: LaunchMode): SessionState {
     for (const [repoId] of sessions) killRepo(repoId)
   }
 
-  const pids: number[] = []
-  const vscodeDirectories: string[] = []
+  const terminalPids: number[] = []
+  let vscodePids: number[] = []
 
   for (const win of repo.vscodeWindows) {
-    if (spawnVscodeWindow(win.directory)) {
-      vscodeDirectories.push(win.directory)
-    }
+    vscodePids = vscodePids.concat(spawnVscodeWindow(win.directory))
   }
 
   for (const term of repo.terminals) {
     const pid = spawnTerminal(term.shell, term.directory)
-    if (pid) pids.push(pid)
+    if (pid) terminalPids.push(pid)
   }
 
-  const active = vscodeDirectories.length > 0 || pids.length > 0
-  sessions.set(repo.id, { repoId: repo.id, pids, vscodeDirectories, active })
-  return { repoId: repo.id, pids, active }
+  const allPids = [...vscodePids, ...terminalPids]
+  const active = allPids.length > 0
+  sessions.set(repo.id, { repoId: repo.id, terminalPids, vscodePids, active })
+  return { repoId: repo.id, pids: allPids, active }
 }
 
 export function killRepo(repoId: string): void {
   const session = sessions.get(repoId)
   if (!session) return
-  for (const dir of session.vscodeDirectories) closeVscodeWindow(dir)
-  for (const pid of session.pids) killPid(pid)
+  for (const pid of session.vscodePids) killPid(pid)
+  for (const pid of session.terminalPids) killPid(pid)
   sessions.delete(repoId)
 }
 
@@ -150,9 +122,9 @@ export function killAllSessions(): void {
 }
 
 export function getSessionStatus(): SessionState[] {
-  return Array.from(sessions.values()).map(({ repoId, pids, active }) => ({
+  return Array.from(sessions.values()).map(({ repoId, terminalPids, vscodePids, active }) => ({
     repoId,
-    pids,
+    pids: [...vscodePids, ...terminalPids],
     active
   }))
 }
