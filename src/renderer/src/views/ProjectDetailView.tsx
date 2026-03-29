@@ -81,7 +81,7 @@ export default function ProjectDetailView({
           className="text-base font-semibold"
           style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text)' }}
         >
-          {project.name}
+          {project.name}'s Repositories
         </h2>
       </div>
 
