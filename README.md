@@ -61,7 +61,33 @@ This starts Electron with Vite's dev server and hot module reloading. Changes to
 npm run build
 ```
 
-The packaged app is output to the `dist/` directory. Run the installer or the `.exe` directly.
+The packaged installer is output to `dist/devrocket-{version}-setup.exe`.
+
+---
+
+## Installing the Packaged App
+
+Run `dist\devrocket-{version}-setup.exe`. The one-click installer requires no admin rights by default and installs to your user profile (`%LOCALAPPDATA%\Programs\devrocket`).
+
+**Upgrading:** Just run the new installer over an existing installation — no need to uninstall first.
+
+**Your data is never touched by install or uninstall.** Project configuration lives separately at `%APPDATA%\devrocket\projects.json` and persists across all installs, upgrades, and uninstalls.
+
+---
+
+## Uninstalling
+
+**Option A — Settings:**
+`Windows Settings → Apps → Installed apps → devrocket → Uninstall`
+
+**Option B — Start Menu:**
+Right-click the devrocket shortcut → Uninstall
+
+To also remove your project data after uninstalling:
+```
+%APPDATA%\devrocket\
+```
+Delete that folder manually if you want a full clean removal.
 
 ---
 
