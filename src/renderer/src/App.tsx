@@ -110,6 +110,7 @@ function App(): React.JSX.Element {
         ) : (
           <ProjectListView
             projects={projects}
+            isActive={isActive}
             onSelect={(id) => {
               setSelectedProjectId(id)
               setView('detail')
@@ -117,6 +118,8 @@ function App(): React.JSX.Element {
             onCreateProject={createProject}
             onUpdateProject={updateProject}
             onDeleteProject={deleteProject}
+            onLaunch={handleLaunch}
+            onKill={kill}
           />
         )}
       </div>
