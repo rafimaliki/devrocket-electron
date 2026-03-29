@@ -31,7 +31,7 @@ function spawnVscodeWindow(directory: string): number[] {
   // Snapshot all Code.exe PIDs before launch
   const before = getAllCodePids()
   try {
-    execSync(`code --new-window "${directory}"`, { shell: true, stdio: 'ignore', timeout: 8000 })
+    execSync(`code --new-window "${directory}"`, { shell: 'cmd.exe', stdio: 'ignore', timeout: 8000 })
   } catch (err) {
     console.warn('[session] VSCode launch error:', err)
     return []
