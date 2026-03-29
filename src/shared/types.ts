@@ -22,6 +22,7 @@ export interface Project {
   name: string
   createdAt: string
   lastOpenedAt?: string
+  notes?: string
   repos: Repo[]
 }
 

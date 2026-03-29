@@ -19,6 +19,7 @@ function App(): React.JSX.Element {
     loading,
     createProject,
     updateProject,
+    updateProjectNotes,
     deleteProject,
     createRepo,
     updateRepo,
@@ -102,6 +103,7 @@ function App(): React.JSX.Element {
             onCreateRepo={createRepo}
             onUpdateRepo={updateRepo}
             onDeleteRepo={deleteRepo}
+            onUpdateNotes={updateProjectNotes}
             onBack={() => {
               setView('list')
               setSelectedProjectId(null)

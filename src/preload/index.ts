@@ -9,6 +9,8 @@ const devrocketAPI = {
     create: (name: string): Promise<Project> => ipcRenderer.invoke('projects:create', name),
     update: (id: string, name: string): Promise<Project> =>
       ipcRenderer.invoke('projects:update', id, name),
+    updateNotes: (id: string, notes: string): Promise<void> =>
+      ipcRenderer.invoke('projects:update-notes', id, notes),
     delete: (id: string): Promise<void> => ipcRenderer.invoke('projects:delete', id)
   },
   repos: {

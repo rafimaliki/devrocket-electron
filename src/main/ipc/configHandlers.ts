@@ -3,6 +3,7 @@ import {
   listProjects,
   createProject,
   updateProject,
+  updateProjectNotes,
   deleteProject,
   createRepo,
   updateRepo,
@@ -20,6 +21,10 @@ export function registerConfigHandlers(): void {
 
   ipcMain.handle('projects:update', (_event, id: string, name: string) => {
     return updateProject(id, name)
+  })
+
+  ipcMain.handle('projects:update-notes', (_event, id: string, notes: string) => {
+    updateProjectNotes(id, notes)
   })
 
   ipcMain.handle('projects:delete', (_event, id: string) => {
