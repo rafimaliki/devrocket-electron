@@ -3,7 +3,9 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerConfigHandlers } from './ipc/configHandlers'
+import { registerSessionHandlers } from './ipc/sessionHandlers'
 import { registerSystemHandlers, checkVscodeOnStartup } from './ipc/systemHandlers'
+import { startProcessTracker, stopProcessTracker } from './services/processTracker'
 
 function createWindow(): void {
   const mainWindow = new BrowserWindow({
@@ -55,8 +57,10 @@ app.whenReady().then(() => {
   })
 
   registerConfigHandlers()
+  registerSessionHandlers()
   registerSystemHandlers()
   checkVscodeOnStartup()
+  startProcessTracker()
   createWindow()
 
   app.on('activate', function () {
@@ -70,6 +74,7 @@ app.whenReady().then(() => {
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
 app.on('window-all-closed', () => {
+  stopProcessTracker()
   if (process.platform !== 'darwin') {
     app.quit()
   }
