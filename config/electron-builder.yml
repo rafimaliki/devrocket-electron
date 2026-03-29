@@ -1,5 +1,5 @@
 appId: com.devrocket.app
-productName: devrocket
+productName: DevRocket
 directories:
   buildResources: build
 files:

@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, dialog } from 'electron'
 import { execSync } from 'child_process'
 
 function isVscodeAvailable(): boolean {
@@ -21,4 +21,12 @@ export function checkVscodeOnStartup(): void {
 
 export function registerSystemHandlers(): void {
   ipcMain.handle('system:check-vscode', () => isVscodeAvailable())
+
+  ipcMain.handle('system:pick-directory', async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ['openDirectory'],
+      title: 'Select Directory'
+    })
+    return result.canceled ? null : result.filePaths[0]
+  })
 }

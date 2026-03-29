@@ -1,31 +1,82 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import type { Project } from '@shared/types'
-import ConfirmDialog from '../components/ConfirmDialog'
+import type { LaunchMode } from '../ipc/bridge'
+import StatusBadge from '../components/StatusBadge'
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days}d ago`
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function sortedByLastOpened(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => {
+    if (!a.lastOpenedAt && !b.lastOpenedAt) return 0
+    if (!a.lastOpenedAt) return 1
+    if (!b.lastOpenedAt) return -1
+    return new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime()
+  })
+}
+
+const IconEye = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M1 7C1 7 3 3 7 3C11 3 13 7 13 7C13 7 11 11 7 11C3 11 1 7 1 7Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="7" cy="7" r="1.5" stroke="currentColor" strokeWidth="1.4"/>
+  </svg>
+)
+
+const IconChevron = ({ expanded }: { expanded: boolean }) => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 12 12"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    style={{
+      transition: 'transform 0.15s',
+      transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+      flexShrink: 0
+    }}
+  >
+    <path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
 
 interface ProjectListViewProps {
   projects: Project[]
+  isActive: (repoId: string) => boolean
   onSelect: (projectId: string) => void
   onCreateProject: (name: string) => void
   onUpdateProject: (id: string, name: string) => void
-  onDeleteProject: (projectId: string) => void
+  onLaunch: (repoId: string, mode: LaunchMode) => void
+  onKill: (repoId: string) => void
 }
 
 export default function ProjectListView({
   projects,
+  isActive,
   onSelect,
   onCreateProject,
-  onUpdateProject,
-  onDeleteProject
+  onLaunch,
+  onKill
 }: ProjectListViewProps) {
   const [newName, setNewName] = useState('')
-  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingName, setEditingName] = useState('')
-  const editInputRef = useRef<HTMLInputElement>(null)
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
-  useEffect(() => {
-    if (editingId) editInputRef.current?.focus()
-  }, [editingId])
+  function toggleExpand(id: string) {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
 
   function handleCreate() {
     const name = newName.trim()
@@ -34,37 +85,16 @@ export default function ProjectListView({
     setNewName('')
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') handleCreate()
-  }
-
-  function startEdit(p: Project, e: React.MouseEvent) {
-    e.stopPropagation()
-    setEditingId(p.id)
-    setEditingName(p.name)
-  }
-
-  function commitEdit(id: string) {
-    const name = editingName.trim()
-    if (name) onUpdateProject(id, name)
-    setEditingId(null)
-  }
-
-  function handleEditKeyDown(e: React.KeyboardEvent, id: string) {
-    if (e.key === 'Enter') commitEdit(id)
-    if (e.key === 'Escape') setEditingId(null)
-  }
-
-  const inputStyle = {
-    flex: 1,
-    backgroundColor: 'var(--color-surface)',
-    border: '1px solid var(--color-border)',
-    color: 'var(--color-text)',
-    fontFamily: 'var(--font-mono)',
-    fontSize: '13px',
-    borderRadius: '6px',
-    padding: '8px 12px',
-    outline: 'none'
+  const monoSm = { fontFamily: 'var(--font-mono)', fontSize: '12px' }
+  const mutedColor = { color: 'var(--color-text-muted)' }
+  const iconBtn = {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: 'var(--color-text-muted)',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '4px'
   }
 
   return (
@@ -76,19 +106,28 @@ export default function ProjectListView({
         >
           devrocket
         </h1>
-        <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+        <span style={{ ...monoSm, ...mutedColor }}>
           {projects.length} project{projects.length !== 1 ? 's' : ''}
         </span>
       </div>
 
       {/* Create project */}
-      <div className="flex gap-2 mb-6">
+      <div className="flex gap-2 mb-5">
         <input
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={handleKeyDown}
+          onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
           placeholder="new project name"
-          style={inputStyle}
+          style={{
+            flex: 1,
+            backgroundColor: 'var(--color-surface)',
+            border: '1px solid var(--color-border)',
+            color: 'var(--color-text)',
+            fontFamily: 'var(--font-mono)',
+            fontSize: '13px',
+            borderRadius: '6px',
+            padding: '8px 12px'
+          }}
         />
         <button
           onClick={handleCreate}
@@ -101,8 +140,7 @@ export default function ProjectListView({
             padding: '8px 16px',
             fontFamily: 'var(--font-mono)',
             fontSize: '13px',
-            cursor: newName.trim() ? 'pointer' : 'default',
-            transition: 'background-color 0.15s'
+            cursor: newName.trim() ? 'pointer' : 'default'
           }}
         >
           create
@@ -111,104 +149,125 @@ export default function ProjectListView({
 
       {/* Project list */}
       {projects.length === 0 ? (
-        <p style={{ color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
-          no projects yet
-        </p>
+        <p style={{ ...monoSm, ...mutedColor }}>no projects yet</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {projects.map((p) => (
-            <div
-              key={p.id}
-              className="flex items-center justify-between rounded-lg border px-4 py-3"
-              style={{
-                backgroundColor: 'var(--color-surface)',
-                borderColor: 'var(--color-border)',
-                cursor: editingId === p.id ? 'default' : 'pointer'
-              }}
-              onClick={() => editingId !== p.id && onSelect(p.id)}
-            >
-              {editingId === p.id ? (
-                <input
-                  ref={editInputRef}
-                  value={editingName}
-                  onChange={(e) => setEditingName(e.target.value)}
-                  onBlur={() => commitEdit(p.id)}
-                  onKeyDown={(e) => handleEditKeyDown(e, p.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  style={{
-                    flex: 1,
-                    background: 'none',
-                    border: 'none',
-                    borderBottom: '1px solid var(--color-accent)',
-                    color: 'var(--color-text)',
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '14px',
-                    outline: 'none',
-                    padding: '0 0 2px 0'
-                  }}
-                />
-              ) : (
-                <span
-                  style={{
-                    fontFamily: 'var(--font-mono)',
-                    fontSize: '14px',
-                    color: 'var(--color-text)',
-                    flex: 1
-                  }}
+          {sortedByLastOpened(projects).map((p) => {
+            const expanded = expandedIds.has(p.id)
+            return (
+              <div
+                key={p.id}
+                className="rounded-lg border overflow-hidden"
+                style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
+              >
+                {/* Project header — whole row toggles accordion */}
+                <div
+                  className="flex items-center gap-2 px-3 py-3"
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => toggleExpand(p.id)}
                 >
-                  {p.name}
-                </span>
-              )}
-              <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
-                  {p.repos.length} repo{p.repos.length !== 1 ? 's' : ''}
-                </span>
-                <button
-                  onClick={(e) => startEdit(p, e)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--color-text-muted)',
-                    fontSize: '12px',
-                    fontFamily: 'var(--font-mono)',
-                    padding: '2px 4px'
-                  }}
-                  title="Rename"
-                >
-                  edit
-                </button>
-                <button
-                  onClick={() => setDeleteTarget(p)}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    color: 'var(--color-text-muted)',
-                    fontSize: '16px',
-                    padding: '0 4px',
-                    lineHeight: 1
-                  }}
-                  title="Delete project"
-                >
-                  ×
-                </button>
+                  <span style={{ ...mutedColor, display: 'flex', alignItems: 'center' }}>
+                    <IconChevron expanded={expanded} />
+                  </span>
+
+                  <span
+                    style={{
+                      flex: 1,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: '14px',
+                      color: 'var(--color-text)'
+                    }}
+                  >
+                    {p.name}
+                  </span>
+
+                  <div
+                    className="flex items-center gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {p.lastOpenedAt && (
+                      <span style={{ ...monoSm, ...mutedColor, marginRight: '6px' }}>
+                        {relativeTime(p.lastOpenedAt)}
+                      </span>
+                    )}
+                    <span style={{ ...monoSm, ...mutedColor, marginRight: '6px' }}>
+                      {p.repos.length} repo{p.repos.length !== 1 ? 's' : ''}
+                    </span>
+                    <button
+                      onClick={() => onSelect(p.id)}
+                      style={iconBtn}
+                      title="Open project"
+                    >
+                      <IconEye />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expanded repo list */}
+                {expanded && p.repos.length > 0 && (
+                  <div style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
+                    {p.repos.map((repo, i) => {
+                      const active = isActive(repo.id)
+                      return (
+                        <div
+                          key={repo.id}
+                          className="flex items-center gap-3 px-4 py-2.5"
+                          style={{ borderBottom: i < p.repos.length - 1 ? '1px solid var(--color-border)' : undefined }}
+                        >
+                          <span style={{ ...monoSm, color: 'var(--color-text)', flex: 1 }}>
+                            {repo.name}
+                          </span>
+                          <StatusBadge active={active} />
+                          <div className="flex gap-1.5">
+                            {active ? (
+                              <>
+                                <button
+                                  onClick={() => onLaunch(repo.id, 'new')}
+                                  style={{ ...monoSm, backgroundColor: 'var(--color-surface)', color: 'var(--color-accent)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '3px 10px', cursor: 'pointer' }}
+                                >
+                                  + new
+                                </button>
+                                <button
+                                  onClick={() => onKill(repo.id)}
+                                  style={{ ...monoSm, backgroundColor: 'transparent', color: 'var(--color-danger)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '3px 10px', cursor: 'pointer' }}
+                                >
+                                  kill
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button
+                                  onClick={() => onLaunch(repo.id, 'switch')}
+                                  style={{ ...monoSm, backgroundColor: 'transparent', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '3px 10px', cursor: 'pointer' }}
+                                >
+                                  switch
+                                </button>
+                                <button
+                                  onClick={() => onLaunch(repo.id, 'new')}
+                                  style={{ ...monoSm, backgroundColor: 'var(--color-accent)', color: '#fff', border: 'none', borderRadius: '4px', padding: '3px 10px', cursor: 'pointer' }}
+                                >
+                                  launch
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {expanded && p.repos.length === 0 && (
+                  <div style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', padding: '10px 16px' }}>
+                    <span style={{ ...monoSm, ...mutedColor }}>no repos — click pencil to open project and add one</span>
+                  </div>
+                )}
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
-      <ConfirmDialog
-        open={!!deleteTarget}
-        title="delete project"
-        message={`Delete "${deleteTarget?.name}"? This will remove all its repos.`}
-        onConfirm={() => {
-          if (deleteTarget) onDeleteProject(deleteTarget.id)
-          setDeleteTarget(null)
-        }}
-        onCancel={() => setDeleteTarget(null)}
-      />
     </div>
   )
 }

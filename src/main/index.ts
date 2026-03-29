@@ -13,6 +13,7 @@ function createWindow(): void {
     height: 680,
     minWidth: 720,
     minHeight: 500,
+    title: 'DevRocket',
     show: false,
     autoHideMenuBar: true,
     icon,

@@ -21,6 +21,8 @@ export interface Project {
   id: string
   name: string
   createdAt: string
+  lastOpenedAt?: string
+  notes?: string
   repos: Repo[]
 }
 

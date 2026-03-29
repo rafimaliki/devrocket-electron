@@ -65,6 +65,22 @@ export function updateProject(id: string, name: string): Project {
   return project
 }
 
+export function updateProjectNotes(id: string, notes: string): void {
+  const store = ensureStore()
+  const project = store.projects.find((p) => p.id === id)
+  if (!project) throw new Error(`Project not found: ${id}`)
+  project.notes = notes
+  saveStore(store)
+}
+
+export function touchProjectLastOpened(projectId: string): void {
+  const store = ensureStore()
+  const project = store.projects.find((p) => p.id === projectId)
+  if (!project) return
+  project.lastOpenedAt = new Date().toISOString()
+  saveStore(store)
+}
+
 export function deleteProject(id: string): void {
   const store = ensureStore()
   store.projects = store.projects.filter((p) => p.id !== id)
