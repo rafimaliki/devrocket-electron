@@ -1,4 +1,4 @@
-import { spawn, execSync } from 'child_process'
+import { spawn, exec, execSync } from 'child_process'
 import { existsSync } from 'fs'
 import type { Repo, SessionState } from '@shared/types'
 
@@ -35,13 +35,11 @@ function spawnTerminal(shell: string, directory: string, title: string): boolean
     console.warn(`[session] Terminal: directory not found: ${directory}`)
     return false
   }
-  // On Windows, `start "title" shell` opens a new visible console window.
-  // The title MUST be quoted in the cmd string — spawn args are unquoted so cmd treats an
-  // unquoted first arg as the executable, not the title. Pass as one shell string instead.
-  spawn('cmd.exe', ['/c', `start "${title}" ${shell}`], {
-    cwd: directory,
-    stdio: 'ignore'
-  }).unref()
+  // Use exec (runs via cmd.exe internally) with the /d flag to set the working directory.
+  // start "title" /d "path" shell opens a new visible console window at the correct path.
+  exec(`start "${title}" /d "${directory}" ${shell}`, (err) => {
+    if (err) console.error('[session] Terminal spawn error:', err)
+  })
   return true
 }
 
