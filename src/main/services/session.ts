@@ -1,6 +1,5 @@
 import { execSync } from 'child_process'
 import { existsSync } from 'fs'
-import { join } from 'path'
 import type { Repo, SessionState } from '@shared/types'
 
 export type LaunchMode = 'new' | 'switch'
@@ -43,29 +42,28 @@ function spawnAndGetPid(executable: string, args: string[], directory: string): 
 }
 
 /**
- * Finds the real Code.exe path by following the `code` CMD wrapper.
- * code.cmd lives in <vscode>/bin/code.cmd, so Code.exe is two levels up.
+ * Returns the set of Code.exe PIDs that currently own a visible window.
+ * Used to diff before/after launch to find the new window's process.
  */
-function findVscodeExe(): string | null {
-  // Common install locations
-  const candidates = [
-    join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Microsoft VS Code', 'Code.exe'),
-    'C:\\Program Files\\Microsoft VS Code\\Code.exe',
-    'C:\\Program Files (x86)\\Microsoft VS Code\\Code.exe'
-  ]
-  for (const p of candidates) {
-    if (existsSync(p)) return p
-  }
-  // Fallback: find code.cmd in PATH, then resolve Code.exe relative to it
+function getCodeWindowPids(): Set<number> {
   try {
-    const codeCmdPath = execSync('where code.cmd', { encoding: 'utf-8', timeout: 3000 })
-      .trim()
-      .split('\n')[0]
-      .trim()
-    const codeExe = join(codeCmdPath, '..', '..', 'Code.exe')
-    if (existsSync(codeExe)) return codeExe
-  } catch {}
-  return null
+    const script = `(Get-Process -Name 'Code' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }).Id -join ','`
+    const encoded = Buffer.from(script, 'utf16le').toString('base64')
+    const out = execSync(`powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, {
+      encoding: 'utf-8',
+      timeout: 5000
+    })
+    return new Set(
+      out
+        .trim()
+        .split(',')
+        .filter(Boolean)
+        .map(Number)
+        .filter((n) => n > 0)
+    )
+  } catch {
+    return new Set()
+  }
 }
 
 function spawnVscodeWindow(directory: string): number | null {
@@ -73,13 +71,33 @@ function spawnVscodeWindow(directory: string): number | null {
     console.warn(`[session] VSCode: directory not found: ${directory}`)
     return null
   }
-  const codeExe = findVscodeExe()
-  if (!codeExe) {
-    console.warn('[session] VSCode: Code.exe not found')
+
+  // Snapshot existing Code.exe window PIDs before launch
+  const before = getCodeWindowPids()
+
+  // Launch VSCode via the code CLI — use shell:true to resolve code.cmd
+  try {
+    execSync(`code --new-window "${directory}"`, { shell: true, stdio: 'ignore', timeout: 8000 })
+  } catch (err) {
+    console.warn('[session] VSCode launch error:', err)
     return null
   }
-  // Spawn Code.exe directly (not the .cmd wrapper) so Start-Process -PassThru returns the real PID
-  return spawnAndGetPid(codeExe, ['--new-window', directory], directory)
+
+  // Wait for VSCode to open the new window (it can take a couple of seconds)
+  execSync('powershell.exe -NoProfile -Command "Start-Sleep -Seconds 3"', {
+    stdio: 'ignore',
+    timeout: 6000
+  })
+
+  // Diff — new window-owning Code.exe PIDs that weren't there before
+  const after = getCodeWindowPids()
+  const newPids = [...after].filter((pid) => !before.has(pid))
+
+  if (newPids.length === 0) {
+    console.warn('[session] VSCode: no new window PID found — window may be inside existing instance')
+  }
+
+  return newPids[0] ?? null
 }
 
 function spawnTerminal(shell: string, directory: string): number | null {
