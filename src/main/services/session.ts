@@ -36,8 +36,9 @@ function spawnTerminal(shell: string, directory: string, title: string): boolean
     return false
   }
   // On Windows, `start "title" shell` opens a new visible console window.
-  // cmd.exe exits immediately after launching the shell, so we track by window title instead of PID.
-  spawn('cmd.exe', ['/c', 'start', title, shell], {
+  // The title MUST be quoted in the cmd string — spawn args are unquoted so cmd treats an
+  // unquoted first arg as the executable, not the title. Pass as one shell string instead.
+  spawn('cmd.exe', ['/c', `start "${title}" ${shell}`], {
     cwd: directory,
     stdio: 'ignore'
   }).unref()
