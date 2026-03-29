@@ -1,5 +1,6 @@
 import { execSync } from 'child_process'
 import { existsSync } from 'fs'
+import { join } from 'path'
 import type { Repo, SessionState } from '@shared/types'
 
 export type LaunchMode = 'new' | 'switch'
@@ -41,12 +42,44 @@ function spawnAndGetPid(executable: string, args: string[], directory: string): 
   }
 }
 
+/**
+ * Finds the real Code.exe path by following the `code` CMD wrapper.
+ * code.cmd lives in <vscode>/bin/code.cmd, so Code.exe is two levels up.
+ */
+function findVscodeExe(): string | null {
+  // Common install locations
+  const candidates = [
+    join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Microsoft VS Code', 'Code.exe'),
+    'C:\\Program Files\\Microsoft VS Code\\Code.exe',
+    'C:\\Program Files (x86)\\Microsoft VS Code\\Code.exe'
+  ]
+  for (const p of candidates) {
+    if (existsSync(p)) return p
+  }
+  // Fallback: find code.cmd in PATH, then resolve Code.exe relative to it
+  try {
+    const codeCmdPath = execSync('where code.cmd', { encoding: 'utf-8', timeout: 3000 })
+      .trim()
+      .split('\n')[0]
+      .trim()
+    const codeExe = join(codeCmdPath, '..', '..', 'Code.exe')
+    if (existsSync(codeExe)) return codeExe
+  } catch {}
+  return null
+}
+
 function spawnVscodeWindow(directory: string): number | null {
   if (!existsSync(directory)) {
     console.warn(`[session] VSCode: directory not found: ${directory}`)
     return null
   }
-  return spawnAndGetPid('code', ['--new-window', directory], directory)
+  const codeExe = findVscodeExe()
+  if (!codeExe) {
+    console.warn('[session] VSCode: Code.exe not found')
+    return null
+  }
+  // Spawn Code.exe directly (not the .cmd wrapper) so Start-Process -PassThru returns the real PID
+  return spawnAndGetPid(codeExe, ['--new-window', directory], directory)
 }
 
 function spawnTerminal(shell: string, directory: string): number | null {
