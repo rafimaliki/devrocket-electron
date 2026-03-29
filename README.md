@@ -1,18 +1,29 @@
-# devrocket
+# DevRocket
 
-A local Windows desktop app for launching and switching dev environments in one click.
+A UI-based workspace manager for Windows developers. Define your projects, configure repositories with VSCode windows and terminals, and launch your entire dev environment in one click — or switch context instantly by killing your current session and spinning up a new one.
 
-Define your projects, configure repositories with VSCode windows and terminals, then launch everything at once — or switch context by killing your current session and spinning up a new one instantly.
+---
+
+## Preview
+
+<p align="center">
+  <img src="img/main_menu.png" alt="Main Menu" width="720" />
+</p>
+<p align="center">
+  <img src="img/repository.png" alt="Repository View" width="720" />
+</p>
 
 ---
 
 ## Features
 
-- Project and repository management with JSON file storage
+- UI-based project and repository management with local JSON storage
 - One-click launch of VSCode windows and terminal instances per repo
 - Context switching — kill active sessions and launch a new one cleanly
 - Independent multi-repo launching within a project
-- Active session tracking with visual status indicators
+- Active session tracking with live status badges
+- Accordion project list with inline launch controls
+- Per-project notes with auto-save
 - Dark, minimalist dev-focused UI
 
 ---
@@ -58,7 +69,7 @@ This starts Electron with Vite's dev server and hot module reloading. Changes to
 **Package as a Windows `.exe`:**
 
 ```bash
-npm run build
+npm run build:win
 ```
 
 The packaged installer is output to `dist/devrocket-{version}-setup.exe`.
@@ -78,15 +89,17 @@ Run `dist\devrocket-{version}-setup.exe`. The one-click installer requires no ad
 ## Uninstalling
 
 **Option A — Settings:**
-`Windows Settings → Apps → Installed apps → devrocket → Uninstall`
+`Windows Settings → Apps → Installed apps → DevRocket → Uninstall`
 
 **Option B — Start Menu:**
-Right-click the devrocket shortcut → Uninstall
+Right-click the DevRocket shortcut → Uninstall
 
 To also remove your project data after uninstalling:
+
 ```
 %APPDATA%\devrocket\
 ```
+
 Delete that folder manually if you want a full clean removal.
 
 ---
@@ -123,13 +136,15 @@ No account, no cloud sync, no telemetry.
 
 **VSCode doesn't open when launching a repo**
 Make sure `code` is available in your system PATH. Open a terminal and run:
+
 ```bash
 code --version
 ```
+
 If that fails, open VSCode, press `Ctrl+Shift+P`, and run **Shell Command: Install 'code' command in PATH**.
 
 **Terminal doesn't open**
 Check that the shell configured for the terminal instance (e.g. `powershell.exe`) exists at the specified path or is available in PATH.
 
 **App shows a repo as active after manually closing it**
-devrocket polls process liveness every few seconds. The status badge will update automatically within 5 seconds of the process exiting.
+DevRocket polls process liveness every few seconds. The status badge will update automatically within 5 seconds of the process exiting.
