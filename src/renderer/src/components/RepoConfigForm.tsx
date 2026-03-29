@@ -1,5 +1,12 @@
 import { useState } from 'react'
 import type { VSCodeWindow, TerminalInstance } from '@shared/types'
+import { system } from '../ipc/bridge'
+
+const IconFolder = () => (
+  <svg width="13" height="13" viewBox="0 0 13 13" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M1 3.5C1 2.95 1.45 2.5 2 2.5H5L6.5 4H11C11.55 4 12 4.45 12 5V10C12 10.55 11.55 11 11 11H2C1.45 11 1 10.55 1 10V3.5Z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
 
 interface RepoConfigFormProps {
   initialName?: string
@@ -40,6 +47,11 @@ export default function RepoConfigForm({
     setVscodeWindows((prev) => prev.map((w, idx) => (idx === i ? { directory } : w)))
   }
 
+  async function browseWindow(i: number) {
+    const dir = await system.pickDirectory()
+    if (dir) updateWindow(i, dir)
+  }
+
   function addWindow() {
     setVscodeWindows((prev) => [...prev, { directory: '' }])
   }
@@ -50,6 +62,11 @@ export default function RepoConfigForm({
 
   function updateTerminal(i: number, field: 'shell' | 'directory', value: string) {
     setTerminals((prev) => prev.map((t, idx) => (idx === i ? { ...t, [field]: value } : t)))
+  }
+
+  async function browseTerminal(i: number) {
+    const dir = await system.pickDirectory()
+    if (dir) updateTerminal(i, 'directory', dir)
   }
 
   function addTerminal() {
@@ -112,6 +129,18 @@ export default function RepoConfigForm({
     flexShrink: 0
   }
 
+  const browseBtnStyle = {
+    background: 'none',
+    border: '1px solid var(--color-border)',
+    borderRadius: '4px',
+    cursor: 'pointer',
+    color: 'var(--color-text-muted)',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '5px 7px',
+    flexShrink: 0
+  }
+
   return (
     <div
       className="rounded-lg border p-5"
@@ -139,6 +168,9 @@ export default function RepoConfigForm({
               onChange={(e) => updateWindow(i, e.target.value)}
               placeholder="C:\path\to\directory"
             />
+            <button style={browseBtnStyle} onClick={() => browseWindow(i)} title="Browse">
+              <IconFolder />
+            </button>
             {vscodeWindows.length > 1 && (
               <button style={removeBtnStyle} onClick={() => removeWindow(i)} title="Remove">
                 ×
@@ -173,6 +205,9 @@ export default function RepoConfigForm({
                   placeholder="C:\path\to\directory"
                 />
               </div>
+              <button style={browseBtnStyle} onClick={() => browseTerminal(i)} title="Browse">
+                <IconFolder />
+              </button>
               {terminals.length > 1 && (
                 <button style={removeBtnStyle} onClick={() => removeTerminal(i)} title="Remove">
                   ×

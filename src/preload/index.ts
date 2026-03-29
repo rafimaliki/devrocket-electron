@@ -48,7 +48,8 @@ const devrocketAPI = {
     }
   },
   system: {
-    checkVscode: (): Promise<boolean> => ipcRenderer.invoke('system:check-vscode')
+    checkVscode: (): Promise<boolean> => ipcRenderer.invoke('system:check-vscode'),
+    pickDirectory: (): Promise<string | null> => ipcRenderer.invoke('system:pick-directory')
   }
 }
 
