@@ -104,6 +104,11 @@ function App(): React.JSX.Element {
             onUpdateRepo={updateRepo}
             onDeleteRepo={deleteRepo}
             onUpdateNotes={updateProjectNotes}
+            onDeleteProject={(id) => {
+              deleteProject(id)
+              setView('list')
+              setSelectedProjectId(null)
+            }}
             onBack={() => {
               setView('list')
               setSelectedProjectId(null)
@@ -119,7 +124,6 @@ function App(): React.JSX.Element {
             }}
             onCreateProject={createProject}
             onUpdateProject={updateProject}
-            onDeleteProject={deleteProject}
             onLaunch={handleLaunch}
             onKill={kill}
           />

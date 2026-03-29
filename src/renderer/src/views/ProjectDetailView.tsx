@@ -25,6 +25,7 @@ interface ProjectDetailViewProps {
   ) => void
   onDeleteRepo: (projectId: string, repoId: string) => void
   onUpdateNotes: (id: string, notes: string) => void
+  onDeleteProject: (id: string) => void
   onBack: () => void
 }
 
@@ -37,11 +38,13 @@ export default function ProjectDetailView({
   onUpdateRepo,
   onDeleteRepo,
   onUpdateNotes,
+  onDeleteProject,
   onBack
 }: ProjectDetailViewProps) {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [editingRepo, setEditingRepo] = useState<Repo | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Repo | null>(null)
+  const [confirmDeleteProject, setConfirmDeleteProject] = useState(false)
   const [notes, setNotes] = useState(project.notes ?? '')
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | ''>('')
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -82,27 +85,44 @@ export default function ProjectDetailView({
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
-      <div className="flex items-center gap-3 mb-6">
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onBack}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: 'var(--color-text-muted)',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '13px',
+              padding: 0
+            }}
+          >
+            ← back
+          </button>
+          <h2
+            className="text-base font-semibold"
+            style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text)' }}
+          >
+            {project.name}'s Repositories
+          </h2>
+        </div>
         <button
-          onClick={onBack}
+          onClick={() => setConfirmDeleteProject(true)}
           style={{
             background: 'none',
-            border: 'none',
+            border: '1px solid var(--color-border)',
+            borderRadius: '6px',
             cursor: 'pointer',
-            color: 'var(--color-text-muted)',
+            color: 'var(--color-danger)',
             fontFamily: 'var(--font-mono)',
-            fontSize: '13px',
-            padding: 0
+            fontSize: '12px',
+            padding: '5px 12px'
           }}
         >
-          ← back
+          delete project
         </button>
-        <h2
-          className="text-base font-semibold"
-          style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-text)' }}
-        >
-          {project.name}'s Repositories
-        </h2>
       </div>
 
       {/* Repo list */}
@@ -198,6 +218,14 @@ export default function ProjectDetailView({
           }}
         />
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteProject}
+        title="delete project"
+        message={`Delete "${project.name}" and all its repos? This cannot be undone.`}
+        onConfirm={() => onDeleteProject(project.id)}
+        onCancel={() => setConfirmDeleteProject(false)}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}

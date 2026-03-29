@@ -2,7 +2,6 @@ import { useState } from 'react'
 import type { Project } from '@shared/types'
 import type { LaunchMode } from '../ipc/bridge'
 import StatusBadge from '../components/StatusBadge'
-import ConfirmDialog from '../components/ConfirmDialog'
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -26,15 +25,10 @@ function sortedByLastOpened(projects: Project[]): Project[] {
   })
 }
 
-const IconPencil = () => (
+const IconEye = () => (
   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M9.5 2.5L11.5 4.5L4.5 11.5H2.5V9.5L9.5 2.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-)
-
-const IconTrash = () => (
-  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M2 4H12M5 4V2.5H9V4M5.5 6.5V10.5M8.5 6.5V10.5M3 4L3.5 11.5H10.5L11 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M1 7C1 7 3 3 7 3C11 3 13 7 13 7C13 7 11 11 7 11C3 11 1 7 1 7Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+    <circle cx="7" cy="7" r="1.5" stroke="currentColor" strokeWidth="1.4"/>
   </svg>
 )
 
@@ -61,7 +55,6 @@ interface ProjectListViewProps {
   onSelect: (projectId: string) => void
   onCreateProject: (name: string) => void
   onUpdateProject: (id: string, name: string) => void
-  onDeleteProject: (projectId: string) => void
   onLaunch: (repoId: string, mode: LaunchMode) => void
   onKill: (repoId: string) => void
 }
@@ -71,12 +64,10 @@ export default function ProjectListView({
   isActive,
   onSelect,
   onCreateProject,
-  onDeleteProject,
   onLaunch,
   onKill
 }: ProjectListViewProps) {
   const [newName, setNewName] = useState('')
-  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
 
   function toggleExpand(id: string) {
@@ -207,14 +198,7 @@ export default function ProjectListView({
                       style={iconBtn}
                       title="Open project"
                     >
-                      <IconPencil />
-                    </button>
-                    <button
-                      onClick={() => setDeleteTarget(p)}
-                      style={{ ...iconBtn, color: 'var(--color-text-muted)' }}
-                      title="Delete project"
-                    >
-                      <IconTrash />
+                      <IconEye />
                     </button>
                   </div>
                 </div>
@@ -284,16 +268,6 @@ export default function ProjectListView({
         </div>
       )}
 
-      <ConfirmDialog
-        open={!!deleteTarget}
-        title="delete project"
-        message={`Delete "${deleteTarget?.name}"? This will remove all its repos.`}
-        onConfirm={() => {
-          if (deleteTarget) onDeleteProject(deleteTarget.id)
-          setDeleteTarget(null)
-        }}
-        onCancel={() => setDeleteTarget(null)}
-      />
     </div>
   )
 }
