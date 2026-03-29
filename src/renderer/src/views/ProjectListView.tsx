@@ -145,16 +145,20 @@ export default function ProjectListView({
                       border: 'none',
                       cursor: 'pointer',
                       color: 'var(--color-text-muted)',
-                      fontSize: '10px',
+                      fontSize: '14px',
                       padding: '0 4px',
                       lineHeight: 1,
                       flexShrink: 0,
                       transition: 'transform 0.15s',
-                      transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)'
+                      transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+                      display: 'flex',
+                      alignItems: 'center'
                     }}
                     title={expanded ? 'Collapse' : 'Expand repos'}
                   >
-                    ▶
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   </button>
 
                   {/* Project name / inline edit */}
