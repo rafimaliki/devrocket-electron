@@ -1,5 +1,27 @@
 import { useState, useRef, useEffect } from 'react'
 import type { Project } from '@shared/types'
+
+function relativeTime(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  if (days === 1) return 'yesterday'
+  if (days < 7) return `${days}d ago`
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
+function sortedByLastOpened(projects: Project[]): Project[] {
+  return [...projects].sort((a, b) => {
+    if (!a.lastOpenedAt && !b.lastOpenedAt) return 0
+    if (!a.lastOpenedAt) return 1
+    if (!b.lastOpenedAt) return -1
+    return new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime()
+  })
+}
 import type { LaunchMode } from '../ipc/bridge'
 import StatusBadge from '../components/StatusBadge'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -127,7 +149,7 @@ export default function ProjectListView({
         <p style={{ ...monoSm, ...mutedColor }}>no projects yet</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {projects.map((p) => {
+          {sortedByLastOpened(projects).map((p) => {
             const expanded = expandedIds.has(p.id)
             return (
               <div
@@ -204,6 +226,9 @@ export default function ProjectListView({
 
                   {/* Meta + actions */}
                   <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                    {p.lastOpenedAt && (
+                      <span style={{ ...monoSm, ...mutedColor }}>{relativeTime(p.lastOpenedAt)}</span>
+                    )}
                     <span style={{ ...monoSm, ...mutedColor }}>
                       {p.repos.length} repo{p.repos.length !== 1 ? 's' : ''}
                     </span>
