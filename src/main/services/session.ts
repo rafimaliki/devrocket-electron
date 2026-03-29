@@ -41,41 +41,13 @@ function spawnAndGetPid(executable: string, args: string[], directory: string): 
   }
 }
 
-/**
- * Returns the set of Code.exe PIDs that currently own a visible window.
- * Used to diff before/after launch to find the new window's process.
- */
-function getCodeWindowPids(): Set<number> {
-  try {
-    const script = `(Get-Process -Name 'Code' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }).Id -join ','`
-    const encoded = Buffer.from(script, 'utf16le').toString('base64')
-    const out = execSync(`powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`, {
-      encoding: 'utf-8',
-      timeout: 5000
-    })
-    return new Set(
-      out
-        .trim()
-        .split(',')
-        .filter(Boolean)
-        .map(Number)
-        .filter((n) => n > 0)
-    )
-  } catch {
-    return new Set()
-  }
-}
-
 function spawnVscodeWindow(directory: string): number | null {
   if (!existsSync(directory)) {
     console.warn(`[session] VSCode: directory not found: ${directory}`)
     return null
   }
 
-  // Snapshot existing Code.exe window PIDs before launch
-  const before = getCodeWindowPids()
-
-  // Launch VSCode via the code CLI — use shell:true to resolve code.cmd
+  // Launch VSCode
   try {
     execSync(`code --new-window "${directory}"`, { shell: true, stdio: 'ignore', timeout: 8000 })
   } catch (err) {
@@ -83,21 +55,34 @@ function spawnVscodeWindow(directory: string): number | null {
     return null
   }
 
-  // Wait for VSCode to open the new window (it can take a couple of seconds)
+  // Wait for the window to finish loading and set its title
   execSync('powershell.exe -NoProfile -Command "Start-Sleep -Seconds 3"', {
     stdio: 'ignore',
     timeout: 6000
   })
 
-  // Diff — new window-owning Code.exe PIDs that weren't there before
-  const after = getCodeWindowPids()
-  const newPids = [...after].filter((pid) => !before.has(pid))
+  // VSCode window title format: "<folder> - Visual Studio Code"
+  // Find the most recently started Code.exe whose window title contains the folder name.
+  const folderName = directory.split(/[\\/]/).filter(Boolean).pop() ?? ''
+  if (!folderName) return null
 
-  if (newPids.length === 0) {
-    console.warn('[session] VSCode: no new window PID found — window may be inside existing instance')
+  try {
+    const script =
+      `$p = Get-Process Code -ErrorAction SilentlyContinue ` +
+      `| Where-Object { $_.MainWindowTitle -like '*${folderName.replace(/'/g, "''")}*' } ` +
+      `| Sort-Object StartTime -Descending ` +
+      `| Select-Object -First 1; ` +
+      `if ($p) { $p.Id } else { 0 }`
+    const encoded = Buffer.from(script, 'utf16le').toString('base64')
+    const result = execSync(
+      `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encoded}`,
+      { encoding: 'utf-8', timeout: 5000 }
+    )
+    const pid = parseInt(result.trim(), 10)
+    return pid > 0 ? pid : null
+  } catch {
+    return null
   }
-
-  return newPids[0] ?? null
 }
 
 function spawnTerminal(shell: string, directory: string): number | null {
