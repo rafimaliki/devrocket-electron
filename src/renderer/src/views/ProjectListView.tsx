@@ -1,5 +1,8 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import type { Project } from '@shared/types'
+import type { LaunchMode } from '../ipc/bridge'
+import StatusBadge from '../components/StatusBadge'
+import ConfirmDialog from '../components/ConfirmDialog'
 
 function relativeTime(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
@@ -22,9 +25,35 @@ function sortedByLastOpened(projects: Project[]): Project[] {
     return new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime()
   })
 }
-import type { LaunchMode } from '../ipc/bridge'
-import StatusBadge from '../components/StatusBadge'
-import ConfirmDialog from '../components/ConfirmDialog'
+
+const IconPencil = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M9.5 2.5L11.5 4.5L4.5 11.5H2.5V9.5L9.5 2.5Z" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
+
+const IconTrash = () => (
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path d="M2 4H12M5 4V2.5H9V4M5.5 6.5V10.5M8.5 6.5V10.5M3 4L3.5 11.5H10.5L11 4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
+
+const IconChevron = ({ expanded }: { expanded: boolean }) => (
+  <svg
+    width="12"
+    height="12"
+    viewBox="0 0 12 12"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    style={{
+      transition: 'transform 0.15s',
+      transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
+      flexShrink: 0
+    }}
+  >
+    <path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
 
 interface ProjectListViewProps {
   projects: Project[]
@@ -42,24 +71,15 @@ export default function ProjectListView({
   isActive,
   onSelect,
   onCreateProject,
-  onUpdateProject,
   onDeleteProject,
   onLaunch,
   onKill
 }: ProjectListViewProps) {
   const [newName, setNewName] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingName, setEditingName] = useState('')
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
-  const editInputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    if (editingId) editInputRef.current?.focus()
-  }, [editingId])
-
-  function toggleExpand(id: string, e: React.MouseEvent) {
-    e.stopPropagation()
+  function toggleExpand(id: string) {
     setExpandedIds((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
@@ -74,25 +94,17 @@ export default function ProjectListView({
     setNewName('')
   }
 
-  function startEdit(p: Project, e: React.MouseEvent) {
-    e.stopPropagation()
-    setEditingId(p.id)
-    setEditingName(p.name)
-  }
-
-  function commitEdit(id: string) {
-    const name = editingName.trim()
-    if (name) onUpdateProject(id, name)
-    setEditingId(null)
-  }
-
-  function handleEditKeyDown(e: React.KeyboardEvent, id: string) {
-    if (e.key === 'Enter') commitEdit(id)
-    if (e.key === 'Escape') setEditingId(null)
-  }
-
   const monoSm = { fontFamily: 'var(--font-mono)', fontSize: '12px' }
   const mutedColor = { color: 'var(--color-text-muted)' }
+  const iconBtn = {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: 'var(--color-text-muted)',
+    display: 'flex',
+    alignItems: 'center',
+    padding: '4px'
+  }
 
   return (
     <div className="p-6 max-w-2xl mx-auto">
@@ -157,115 +169,66 @@ export default function ProjectListView({
                 className="rounded-lg border overflow-hidden"
                 style={{ backgroundColor: 'var(--color-surface)', borderColor: 'var(--color-border)' }}
               >
-                {/* Project header row */}
-                <div className="flex items-center gap-2 px-3 py-3">
-                  {/* Expand toggle */}
-                  <button
-                    onClick={(e) => toggleExpand(p.id, e)}
+                {/* Project header — whole row toggles accordion */}
+                <div
+                  className="flex items-center gap-2 px-3 py-3"
+                  style={{ cursor: 'pointer', userSelect: 'none' }}
+                  onClick={() => toggleExpand(p.id)}
+                >
+                  <span style={{ ...mutedColor, display: 'flex', alignItems: 'center' }}>
+                    <IconChevron expanded={expanded} />
+                  </span>
+
+                  <span
                     style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: 'var(--color-text-muted)',
+                      flex: 1,
+                      fontFamily: 'var(--font-mono)',
                       fontSize: '14px',
-                      padding: '0 4px',
-                      lineHeight: 1,
-                      flexShrink: 0,
-                      transition: 'transform 0.15s',
-                      transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                      display: 'flex',
-                      alignItems: 'center'
+                      color: 'var(--color-text)'
                     }}
-                    title={expanded ? 'Collapse' : 'Expand repos'}
                   >
-                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                    </svg>
-                  </button>
+                    {p.name}
+                  </span>
 
-                  {/* Project name / inline edit */}
-                  {editingId === p.id ? (
-                    <input
-                      ref={editInputRef}
-                      value={editingName}
-                      onChange={(e) => setEditingName(e.target.value)}
-                      onBlur={() => commitEdit(p.id)}
-                      onKeyDown={(e) => handleEditKeyDown(e, p.id)}
-                      onClick={(e) => e.stopPropagation()}
-                      style={{
-                        flex: 1,
-                        background: 'none',
-                        border: 'none',
-                        borderBottom: '1px solid var(--color-accent)',
-                        color: 'var(--color-text)',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '14px',
-                        outline: 'none',
-                        padding: '0 0 2px 0'
-                      }}
-                    />
-                  ) : (
-                    <button
-                      onClick={() => onSelect(p.id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        fontFamily: 'var(--font-mono)',
-                        fontSize: '14px',
-                        color: 'var(--color-text)',
-                        padding: 0,
-                        flex: 1,
-                        textAlign: 'left'
-                      }}
-                      title="Open project"
-                    >
-                      {p.name}
-                    </button>
-                  )}
-
-                  {/* Meta + actions */}
-                  <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="flex items-center gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {p.lastOpenedAt && (
-                      <span style={{ ...monoSm, ...mutedColor }}>{relativeTime(p.lastOpenedAt)}</span>
+                      <span style={{ ...monoSm, ...mutedColor, marginRight: '6px' }}>
+                        {relativeTime(p.lastOpenedAt)}
+                      </span>
                     )}
-                    <span style={{ ...monoSm, ...mutedColor }}>
+                    <span style={{ ...monoSm, ...mutedColor, marginRight: '6px' }}>
                       {p.repos.length} repo{p.repos.length !== 1 ? 's' : ''}
                     </span>
                     <button
-                      onClick={(e) => startEdit(p, e)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', ...monoSm, ...mutedColor, padding: '2px 4px' }}
-                      title="Rename"
+                      onClick={() => onSelect(p.id)}
+                      style={iconBtn}
+                      title="Open project"
                     >
-                      edit
+                      <IconPencil />
                     </button>
                     <button
                       onClick={() => setDeleteTarget(p)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)', fontSize: '16px', padding: '0 2px', lineHeight: 1 }}
+                      style={{ ...iconBtn, color: 'var(--color-text-muted)' }}
                       title="Delete project"
                     >
-                      ×
+                      <IconTrash />
                     </button>
                   </div>
                 </div>
 
                 {/* Expanded repo list */}
                 {expanded && p.repos.length > 0 && (
-                  <div
-                    style={{
-                      borderTop: '1px solid var(--color-border)',
-                      backgroundColor: 'var(--color-bg)'
-                    }}
-                  >
+                  <div style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)' }}>
                     {p.repos.map((repo, i) => {
                       const active = isActive(repo.id)
                       return (
                         <div
                           key={repo.id}
                           className="flex items-center gap-3 px-4 py-2.5"
-                          style={{
-                            borderBottom: i < p.repos.length - 1 ? '1px solid var(--color-border)' : undefined
-                          }}
+                          style={{ borderBottom: i < p.repos.length - 1 ? '1px solid var(--color-border)' : undefined }}
                         >
                           <span style={{ ...monoSm, color: 'var(--color-text)', flex: 1 }}>
                             {repo.name}
@@ -311,10 +274,8 @@ export default function ProjectListView({
                 )}
 
                 {expanded && p.repos.length === 0 && (
-                  <div
-                    style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', padding: '10px 16px' }}
-                  >
-                    <span style={{ ...monoSm, ...mutedColor }}>no repos — open project to add one</span>
+                  <div style={{ borderTop: '1px solid var(--color-border)', backgroundColor: 'var(--color-bg)', padding: '10px 16px' }}>
+                    <span style={{ ...monoSm, ...mutedColor }}>no repos — click pencil to open project and add one</span>
                   </div>
                 )}
               </div>
