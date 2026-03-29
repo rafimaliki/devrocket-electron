@@ -89,16 +89,16 @@ export default function RepoCard({ repo, active, onLaunch, onKill, onEdit, onDel
         ) : (
           <>
             <button
-              onClick={() => onLaunch('new')}
-              style={{ ...btnBase, backgroundColor: 'var(--color-accent)', color: '#fff' }}
-            >
-              launch
-            </button>
-            <button
               onClick={() => onLaunch('switch')}
               style={{ ...btnBase, backgroundColor: 'transparent', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)' }}
             >
               switch to
+            </button>
+            <button
+              onClick={() => onLaunch('new')}
+              style={{ ...btnBase, backgroundColor: 'var(--color-accent)', color: '#fff' }}
+            >
+              launch
             </button>
           </>
         )}

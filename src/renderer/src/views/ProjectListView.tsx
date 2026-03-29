@@ -253,16 +253,16 @@ export default function ProjectListView({
                             ) : (
                               <>
                                 <button
-                                  onClick={() => onLaunch(repo.id, 'new')}
-                                  style={{ ...monoSm, backgroundColor: 'var(--color-accent)', color: '#fff', border: 'none', borderRadius: '4px', padding: '3px 10px', cursor: 'pointer' }}
-                                >
-                                  launch
-                                </button>
-                                <button
                                   onClick={() => onLaunch(repo.id, 'switch')}
                                   style={{ ...monoSm, backgroundColor: 'transparent', color: 'var(--color-text-muted)', border: '1px solid var(--color-border)', borderRadius: '4px', padding: '3px 10px', cursor: 'pointer' }}
                                 >
                                   switch
+                                </button>
+                                <button
+                                  onClick={() => onLaunch(repo.id, 'new')}
+                                  style={{ ...monoSm, backgroundColor: 'var(--color-accent)', color: '#fff', border: 'none', borderRadius: '4px', padding: '3px 10px', cursor: 'pointer' }}
+                                >
+                                  launch
                                 </button>
                               </>
                             )}
